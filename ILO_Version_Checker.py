@@ -28,6 +28,7 @@ def validate_and_check_ips(file_path):
     Processes a file containing IP addresses (with or without CIDR) and fetches the value within <frwi></frwi>.
     Outputs results in the format: IP: <IP>   |    ILO_Version: <Version>
     """
+    valid_results = []
     try:
         with open(file_path, 'r') as file:
             ip_list = [line.strip().split('/')[0] for line in file if line.strip()]
@@ -38,13 +39,19 @@ def validate_and_check_ips(file_path):
             if not version:  # If HTTPS fails, try HTTP
                 version = get_version_from_url(ip, protocol="http")
             
-            # Only print if a valid version is found
+            # Collect valid results
             if version:
-                print(f"IP: {ip}   |    ILO_Version: {version}")
+                valid_results.append(f"IP: {ip}   |    ILO_Version: {version}")
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
+        return
     except Exception as e:
         print(f"An error occurred: {e}")
+        return
+    
+    # Print all valid results after processing
+    for result in valid_results:
+        print(result)
 
 def main():
     if len(sys.argv) != 2:
