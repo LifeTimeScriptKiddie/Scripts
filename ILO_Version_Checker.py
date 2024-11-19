@@ -1,115 +1,54 @@
 import requests
-from xml.etree import ElementTree as ET
 
-def get_ip_version(ip):
-    # Determine if the IP is IPv4 or IPv6
-    if ':' in ip:
-        return "IPv6"
-    else:
-        return "IPv4"
-
-def validate_ipv4(ip):
-    # Validate the IP address part
-    ip_parts = ip.split('.')
-    if len(ip_parts) != 4:
-        return False
-    
-    for part in ip_parts:
-        try:
-            num = int(part)
-            if num < 0 or num > 255:
-                return False
-        except ValueError:
-            return False
-    
-    return True
-
-def validate_ipv4_cidr(ip_cidr):
-    parts = ip_cidr.split('/')
-    if len(parts) != 2:
-        return False
-    
-    ip, cidr = parts
-    
-    # Validate the IP address part
-    if not validate_ipv4(ip):
-        return False
-    
-    # Validate the CIDR part
+def get_version_from_url(ip, protocol="https"):
+    """
+    Fetches the <FRWI>version</FRWI> value from the given URL.
+    Tries both HTTPS and HTTP if necessary.
+    """
+    url = f"{protocol}://{ip}/xmldata?item=All"
     try:
-        cidr_value = int(cidr)
-        if cidr_value < 0 or cidr_value > 32:
-            return False
-    except ValueError:
-        return False
-    
-    return True
-
-def fetch_fwri_version(url):
-    try:
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
-        
-        root = ET.fromstring(response.content)
-        fwri_version_element = root.find('.//FWRI/version')
-        
-        if fwri_version_element is not None:
-            return fwri_version_element.text
+        response = requests.get(url, verify=False, timeout=5)
+        response.raise_for_status()  # Raise an error for HTTP/HTTPS issues
+        # Look for <FRWI>version</FRWI> in the response content
+        start_tag = "<FRWI>version</FRWI>"
+        start_index = response.text.find(start_tag)
+        if start_index != -1:
+            version_start = start_index + len(start_tag)
+            version_end = response.text.find("<", version_start)
+            version = response.text[version_start:version_end].strip()
+            return version
         else:
-            print("FWRI version element not found in the XML response.")
-            return None
-    
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred while fetching the FWRI version from {url}: {e}")
-        return None
+            return "<FRWI>version</FRWI> tag not found"
+    except requests.RequestException as e:
+        return f"Error: {e}"
 
-def main():
-    file_name = input("Enter the name of the file containing IPv4 addresses (with or without CIDR notation): ")
-    
+def validate_and_check_ips(file_path):
+    """
+    Processes a file containing IP addresses (with or without CIDR) and fetches <FRWI>version</FRWI>.
+    """
     try:
-        with open(file_name, 'r') as file:
-            ip_list = [line.strip() for line in file.readlines()]
-        
-        base_url = "ip/xmldata?item=All"
-        urls_to_try = [
-            f"http://{base_url}",
-            f"https://{base_url}"
-        ]
-        
-        fwri_version = None
-        for url in urls_to_try:
-            fwri_version = fetch_fwri_version(url)
-            if fwri_version is not None:
-                break
-        
-        if fwri_version is None:
-            print("Unable to determine the FWRI version from both HTTP and HTTPS URLs.")
-        else:
-            print(f"FWRI Version: {fwri_version}")
+        with open(file_path, 'r') as file:
+            ip_list = [line.strip().split('/')[0] for line in file if line.strip()]
         
         for ip in ip_list:
-            if '/' in ip:
-                # Check if it's a valid IPv4 with CIDR
-                if validate_ipv4_cidr(ip):
-                    ip_part, cidr = ip.split('/')
-                    version = get_ip_version(ip_part)
-                    fwri_wrapped_version = f"FWRI{version}FWRI"
-                    print(f"IP: {ip_part}, CIDR: /{cidr}, Version: {fwri_wrapped_version}")
-                else:
-                    print(f"Invalid IPv4/CIDR format: {ip}")
-            else:
-                # Check if it's a valid IPv4 without CIDR
-                if validate_ipv4(ip):
-                    version = get_ip_version(ip)
-                    fwri_wrapped_version = f"FWRI{version}FWRI"
-                    print(f"IP: {ip}, Version: {fwri_wrapped_version}")
-                else:
-                    print(f"Invalid IPv4 format: {ip}")
-    
+            print(f"Checking IP: {ip}")
+            
+            # Try HTTPS first, then HTTP if HTTPS fails
+            version = get_version_from_url(ip, protocol="https")
+            if "Error" in version:  # If HTTPS fails, try HTTP
+                print("  HTTPS failed, trying HTTP...")
+                version = get_version_from_url(ip, protocol="http")
+            
+            print(f"  Version: {version}")
     except FileNotFoundError:
-        print(f"The file {file_name} was not found.")
+        print(f"Error: File not found: {file_path}")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+def main():
+    print("Enter the file path containing the list of IP addresses:")
+    file_path = input().strip()
+    validate_and_check_ips(file_path)
 
 if __name__ == "__main__":
     main()
