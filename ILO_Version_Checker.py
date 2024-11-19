@@ -1,4 +1,3 @@
-import re
 import requests
 from xml.etree import ElementTree as ET
 
@@ -9,17 +8,35 @@ def get_ip_version(ip):
     else:
         return "IPv4"
 
-def validate_ip_cidr(ip_cidr):
-    # Regular expression to match IPv4 and IPv6 with CIDR notation
-    ipv4_pattern = re.compile(r'^(\d{1,3}\.){3}\d{1,3}/(8|16|24|32)$')
-    ipv6_pattern = re.compile(r'^([0-9a-fA-F:]+)/(1[0-2][0-8]|1[0-1][0-9]|[1-9]?[0-9])$')
-    
-    if ipv4_pattern.match(ip_cidr):
-        return True
-    elif ipv6_pattern.match(ip_cidr):
-        return True
-    else:
+def validate_ipv4_cidr(ip_cidr):
+    parts = ip_cidr.split('/')
+    if len(parts) != 2:
         return False
+    
+    ip, cidr = parts
+    
+    # Validate the IP address part
+    ip_parts = ip.split('.')
+    if len(ip_parts) != 4:
+        return False
+    
+    for part in ip_parts:
+        try:
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        except ValueError:
+            return False
+    
+    # Validate the CIDR part
+    try:
+        cidr_value = int(cidr)
+        if cidr_value < 0 or cidr_value > 32:
+            return False
+    except ValueError:
+        return False
+    
+    return True
 
 def fetch_fwri_version(url):
     try:
@@ -40,7 +57,7 @@ def fetch_fwri_version(url):
         return None
 
 def main():
-    file_name = input("Enter the name of the file containing IP addresses with CIDR notation: ")
+    file_name = input("Enter the name of the file containing IPv4 addresses with CIDR notation: ")
     
     try:
         with open(file_name, 'r') as file:
@@ -55,13 +72,13 @@ def main():
             print(f"FWRI Version: {fwri_version}")
         
         for ip_cidr in ip_cidr_list:
-            if validate_ip_cidr(ip_cidr):
+            if validate_ipv4_cidr(ip_cidr):
                 ip, cidr = ip_cidr.split('/')
                 version = get_ip_version(ip)
                 fwri_wrapped_version = f"FWRI{version}FWRI"
                 print(f"IP: {ip}, CIDR: /{cidr}, Version: {fwri_wrapped_version}")
             else:
-                print(f"Invalid IP/CIDR format: {ip_cidr}")
+                print(f"Invalid IPv4/CIDR format: {ip_cidr}")
     
     except FileNotFoundError:
         print(f"The file {file_name} was not found.")
