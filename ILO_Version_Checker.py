@@ -1,45 +1,44 @@
 import requests
+import re
 
 def get_version_from_url(ip, protocol="https"):
     """
-    Fetches the <FRWI>version</FRWI> value from the given URL.
-    Tries both HTTPS and HTTP if necessary.
+    Fetches the value between <frwi></frwi> tags in the given URL.
+    Matches a version in the format X.YY (e.g., 2.22, 3.44).
     """
     url = f"{protocol}://{ip}/xmldata?item=All"
+    version_pattern = r"<frwi>(\d\.\d{2})</frwi>"  # Matches 'X.YY' format within <frwi> tags
+    
     try:
         response = requests.get(url, verify=False, timeout=5)
         response.raise_for_status()  # Raise an error for HTTP/HTTPS issues
-        # Look for <FRWI>version</FRWI> in the response content
-        start_tag = "<FRWI>version</FRWI>"
-        start_index = response.text.find(start_tag)
-        if start_index != -1:
-            version_start = start_index + len(start_tag)
-            version_end = response.text.find("<", version_start)
-            version = response.text[version_start:version_end].strip()
-            return version
+        
+        # Search for the version pattern in the response content
+        match = re.search(version_pattern, response.text, re.IGNORECASE)  # Case-insensitive for <frwi>
+        if match:
+            return match.group(1)  # Return the matched version
         else:
-            return "<FRWI>version</FRWI> tag not found"
+            return "Not Found"
     except requests.RequestException as e:
         return f"Error: {e}"
 
 def validate_and_check_ips(file_path):
     """
-    Processes a file containing IP addresses (with or without CIDR) and fetches <FRWI>version</FRWI>.
+    Processes a file containing IP addresses (with or without CIDR) and fetches the value within <frwi></frwi>.
+    Outputs results in the format: IP: <IP>   |    ILO_Version: <Version>
     """
     try:
         with open(file_path, 'r') as file:
             ip_list = [line.strip().split('/')[0] for line in file if line.strip()]
         
         for ip in ip_list:
-            print(f"Checking IP: {ip}")
-            
             # Try HTTPS first, then HTTP if HTTPS fails
             version = get_version_from_url(ip, protocol="https")
             if "Error" in version:  # If HTTPS fails, try HTTP
-                print("  HTTPS failed, trying HTTP...")
                 version = get_version_from_url(ip, protocol="http")
             
-            print(f"  Version: {version}")
+            # Print results in the desired format
+            print(f"IP: {ip}   |    ILO_Version: {version}")
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
     except Exception as e:
