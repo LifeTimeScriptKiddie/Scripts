@@ -47,7 +47,7 @@ def validate_ipv4_cidr(ip_cidr):
 
 def fetch_fwri_version(url):
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)
         response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
         
         root = ET.fromstring(response.content)
@@ -60,7 +60,7 @@ def fetch_fwri_version(url):
             return None
     
     except requests.exceptions.RequestException as e:
-        print(f"An error occurred while fetching the FWRI version: {e}")
+        print(f"An error occurred while fetching the FWRI version from {url}: {e}")
         return None
 
 def main():
@@ -70,11 +70,20 @@ def main():
         with open(file_name, 'r') as file:
             ip_list = [line.strip() for line in file.readlines()]
         
-        fwri_version_url = "https://ip/xmldata?item=All"
-        fwri_version = fetch_fwri_version(fwri_version_url)
+        base_url = "ip/xmldata?item=All"
+        urls_to_try = [
+            f"http://{base_url}",
+            f"https://{base_url}"
+        ]
+        
+        fwri_version = None
+        for url in urls_to_try:
+            fwri_version = fetch_fwri_version(url)
+            if fwri_version is not None:
+                break
         
         if fwri_version is None:
-            print("Unable to determine the FWRI version. Proceeding with default logic.")
+            print("Unable to determine the FWRI version from both HTTP and HTTPS URLs.")
         else:
             print(f"FWRI Version: {fwri_version}")
         
