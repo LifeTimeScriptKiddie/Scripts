@@ -8,13 +8,7 @@ def get_ip_version(ip):
     else:
         return "IPv4"
 
-def validate_ipv4_cidr(ip_cidr):
-    parts = ip_cidr.split('/')
-    if len(parts) != 2:
-        return False
-    
-    ip, cidr = parts
-    
+def validate_ipv4(ip):
     # Validate the IP address part
     ip_parts = ip.split('.')
     if len(ip_parts) != 4:
@@ -27,6 +21,19 @@ def validate_ipv4_cidr(ip_cidr):
                 return False
         except ValueError:
             return False
+    
+    return True
+
+def validate_ipv4_cidr(ip_cidr):
+    parts = ip_cidr.split('/')
+    if len(parts) != 2:
+        return False
+    
+    ip, cidr = parts
+    
+    # Validate the IP address part
+    if not validate_ipv4(ip):
+        return False
     
     # Validate the CIDR part
     try:
@@ -57,11 +64,11 @@ def fetch_fwri_version(url):
         return None
 
 def main():
-    file_name = input("Enter the name of the file containing IPv4 addresses with CIDR notation: ")
+    file_name = input("Enter the name of the file containing IPv4 addresses (with or without CIDR notation): ")
     
     try:
         with open(file_name, 'r') as file:
-            ip_cidr_list = [line.strip() for line in file.readlines()]
+            ip_list = [line.strip() for line in file.readlines()]
         
         fwri_version_url = "https://ip/xmldata?item=All"
         fwri_version = fetch_fwri_version(fwri_version_url)
@@ -71,14 +78,24 @@ def main():
         else:
             print(f"FWRI Version: {fwri_version}")
         
-        for ip_cidr in ip_cidr_list:
-            if validate_ipv4_cidr(ip_cidr):
-                ip, cidr = ip_cidr.split('/')
-                version = get_ip_version(ip)
-                fwri_wrapped_version = f"FWRI{version}FWRI"
-                print(f"IP: {ip}, CIDR: /{cidr}, Version: {fwri_wrapped_version}")
+        for ip in ip_list:
+            if '/' in ip:
+                # Check if it's a valid IPv4 with CIDR
+                if validate_ipv4_cidr(ip):
+                    ip_part, cidr = ip.split('/')
+                    version = get_ip_version(ip_part)
+                    fwri_wrapped_version = f"FWRI{version}FWRI"
+                    print(f"IP: {ip_part}, CIDR: /{cidr}, Version: {fwri_wrapped_version}")
+                else:
+                    print(f"Invalid IPv4/CIDR format: {ip}")
             else:
-                print(f"Invalid IPv4/CIDR format: {ip_cidr}")
+                # Check if it's a valid IPv4 without CIDR
+                if validate_ipv4(ip):
+                    version = get_ip_version(ip)
+                    fwri_wrapped_version = f"FWRI{version}FWRI"
+                    print(f"IP: {ip}, Version: {fwri_wrapped_version}")
+                else:
+                    print(f"Invalid IPv4 format: {ip}")
     
     except FileNotFoundError:
         print(f"The file {file_name} was not found.")
