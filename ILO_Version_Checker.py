@@ -1,5 +1,6 @@
 import requests
 import re
+import sys
 
 def get_version_from_url(ip, protocol="https"):
     """
@@ -18,9 +19,9 @@ def get_version_from_url(ip, protocol="https"):
         if match:
             return match.group(1)  # Return the matched version
         else:
-            return "Not Found"
-    except requests.RequestException as e:
-        return f"Error: {e}"
+            return None  # No version found
+    except requests.RequestException:
+        return None  # Suppress error messages and return None
 
 def validate_and_check_ips(file_path):
     """
@@ -34,19 +35,23 @@ def validate_and_check_ips(file_path):
         for ip in ip_list:
             # Try HTTPS first, then HTTP if HTTPS fails
             version = get_version_from_url(ip, protocol="https")
-            if "Error" in version:  # If HTTPS fails, try HTTP
+            if not version:  # If HTTPS fails, try HTTP
                 version = get_version_from_url(ip, protocol="http")
             
-            # Print results in the desired format
-            print(f"IP: {ip}   |    ILO_Version: {version}")
+            # Only print if a valid version is found
+            if version:
+                print(f"IP: {ip}   |    ILO_Version: {version}")
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
     except Exception as e:
         print(f"An error occurred: {e}")
 
 def main():
-    print("Enter the file path containing the list of IP addresses:")
-    file_path = input().strip()
+    if len(sys.argv) != 2:
+        print("Usage: python ilo3.py <targetipsfile>")
+        sys.exit(1)
+    
+    file_path = sys.argv[1]
     validate_and_check_ips(file_path)
 
 if __name__ == "__main__":
